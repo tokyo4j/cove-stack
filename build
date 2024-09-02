@@ -1,0 +1,138 @@
+#!/usr/bin/bash
+
+BUILDROOT_ROOTFS=buildroot/output/images/rootfs.ext2
+
+build_qemu=
+build_linux=
+build_kvmtool=
+build_buildroot=
+build_root=
+build_salus=
+run=
+
+if [ "$1" = 'all' ]; then
+  build_qemu=1
+  build_linux=1
+  build_kvmtool=1
+  build_buildroot=1
+  build_root=1
+  build_salus=1
+fi
+if [ "$1" = 'qemu' ]; then
+  build_qemu=1
+fi
+if [ "$1" = 'linux' ]; then
+  build_linux=1
+fi
+if [ "$1" = 'kvmtool' ]; then
+  build_kvmtool=1
+fi
+if [ "$1" = 'buildroot' ]; then
+  build_buildroot=1
+fi
+if [ "$1" = 'root' ]; then
+  build_root=1
+fi
+if [ "$1" = 'salus' ]; then
+  build_salus=1
+fi
+if [ "$1" = 'run' ]; then
+  run=1
+fi
+
+if [ ! -d qemu ]; then
+  git clone -b cove-integration-03072023-rev1 --recurse-submodules -j8 https://github.com/tokyo4j/qemu.git
+  mkdir -p qemu/build
+  cd qemu/build
+  ../configure --target-list="riscv64-softmmu"
+  cd ../..
+  build_qemu=1
+fi
+if [ -n "$build_qemu" ]; then
+  cd qemu/build
+  make -j$(nproc)
+  cd ../..
+fi
+
+export ARCH=riscv
+export CROSS_COMPILE=riscv64-linux-gnu-
+if [ ! -d linux ]; then
+  git clone -b cove-integration git@github.com:tokyo4j/linux.git
+  cd linux
+  mkdir build
+  make O=./build defconfig
+  scripts/config --file build/.config --enable CONFIG_RISCV_COVE_HOST
+  scripts/config --file build/.config --enable CONFIG_RISCV_COVE_GUEST
+  scripts/config --file build/.config --enable CONFIG_RISCV_SBI_V01
+  scripts/config --file build/.config --enable CONFIG_KVM
+  scripts/config --file build/.config --enable CONFIG_HVC_RISCV_SBI
+  scripts/config --file build/.config --disable CONFIG_DRM
+  cd ..
+  build_linux=1
+fi
+if [ -n "$build_linux" ]; then
+  cd linux
+  make O=./build -j$(nproc)
+  cd ..
+fi
+
+export ARCH=riscv
+export CROSS_COMPILE=riscv64-linux-gnu-
+if [ ! -d kvmtool ]; then
+  git clone -b cove-integration-03072023 git@github.com:tokyo4j/kvmtool.git
+  cd kvmtool
+  make lkvm-static -j$(nproc)
+  ${CROSS_COMPILE}strip lkvm-static
+  cd ..
+  build_kvmtool=1
+fi
+if [ -n "$build_kvmtool" ]; then
+  cd kvmtool
+  make lkvm-static -j$(nproc)
+  ${CROSS_COMPILE}strip lkvm-static
+  cd ..
+fi
+
+if [ ! -d buildroot ]; then
+  git clone -b cove-integration-03072023 git@github.com:rivosinc/buildroot.git
+  cd buildroot
+  make qemu_riscv64_virt_min_defconfig
+  cd ..
+  build_buildroot=1
+  build_root=1
+fi
+if [ -n "$build_buildroot" ]; then
+  rm -f $BUILDROOT_ROOTFS
+  cd buildroot
+  make -j$(nproc)
+  cd ..
+fi
+
+if [ -n "$build_root" ]; then
+  mkdir mnt
+  sudo mount $BUILDROOT_ROOTFS mnt
+  sudo cp linux/build/arch/riscv/boot/Image kvmtool/lkvm-static mnt/root
+  sudo umount mnt
+  rmdir mnt
+fi
+
+export QEMU=$PWD/qemu/
+export LINUX=$PWD/linux/build/
+export BUILDROOT=$PWD/buildroot/
+if [ ! -d salus ]; then
+  git clone -b dev https://github.com/tokyo4j/salus.git
+  build_salus=1
+fi
+if [ -n "$build_salus" ]; then
+  cd salus
+  make salus
+  cd ..
+fi
+
+if [ -n "$run" ]; then
+  cd salus
+  make run_buildroot
+  cd ..
+fi
+
+# ssh -p 7722 root@localhost ./lkvm-static run -c2 --console virtio --cove-vm -p "earlycon=sbi console=hvc1" -k ./Image --virtio-transport=pci

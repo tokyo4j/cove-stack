@@ -1,0 +1,32 @@
+pkgname=dtc-riscv
+pkgver=1.7.0
+pkgrel=5
+pkgdesc='Device Tree Compiler'
+url='https://www.devicetree.org/'
+arch=(x86_64)
+license=(GPL2)
+depends=()
+makedepends=()
+source=(git://git.kernel.org/pub/scm/utils/dtc/dtc.git)
+sha256sums=('SKIP')
+options=('!debug' 'staticlibs')
+
+export ARCH=riscv
+export CROSS_COMPILE=riscv64-linux-gnu-
+export CC="${CROSS_COMPILE}gcc -mabi=lp64d -march=rv64gc"
+export TRIPLET=$($CC -dumpmachine)
+export SYSROOT=$($CC -print-sysroot)
+
+makeargs="NO_PYTHON=1 NO_YAML=1"
+
+build() {
+  make -C dtc $makeargs libfdt
+}
+
+package() {
+  make -C dtc \
+    $makeargs \
+    DESTDIR=$pkgdir/$SYSROOT \
+    PREFIX=/usr \
+    install-lib install-includes
+}
