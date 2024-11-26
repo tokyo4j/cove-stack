@@ -3,3 +3,5 @@ kvmtool
 linux
 qemu
 salus
+gtest
+glibc

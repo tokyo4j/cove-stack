@@ -1,0 +1,10 @@
+{
+  "git.ignoredRepositories": [
+    "buildroot",
+    "glibc",
+    "linux",
+    "qemu",
+    "salus",
+    "kvmtool"
+  ]
+}

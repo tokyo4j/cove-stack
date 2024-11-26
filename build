@@ -1,10 +1,11 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 BUILDROOT_ROOTFS=buildroot/output/images/rootfs.ext2
 
 build_qemu=
 build_linux=
 build_kvmtool=
+build_gtest=
 build_buildroot=
 build_root=
 build_salus=
@@ -26,6 +27,9 @@ if [ "$1" = 'linux' ]; then
 fi
 if [ "$1" = 'kvmtool' ]; then
   build_kvmtool=1
+fi
+if [ "$1" = 'gtest' ]; then
+  build_gtest=1
 fi
 if [ "$1" = 'buildroot' ]; then
   build_buildroot=1
@@ -72,7 +76,8 @@ if [ ! -d linux ]; then
 fi
 if [ -n "$build_linux" ]; then
   cd linux
-  make O=./build -j$(nproc)
+  make O=./build LLVM=1 -j$(nproc)
+  # scripts/clang-tools/gen_compile_commands.py -d build
   cd ..
 fi
 
@@ -80,10 +85,6 @@ export ARCH=riscv
 export CROSS_COMPILE=riscv64-linux-gnu-
 if [ ! -d kvmtool ]; then
   git clone -b cove-integration-03072023 git@github.com:tokyo4j/kvmtool.git
-  cd kvmtool
-  make lkvm-static -j$(nproc)
-  ${CROSS_COMPILE}strip lkvm-static
-  cd ..
   build_kvmtool=1
 fi
 if [ -n "$build_kvmtool" ]; then
@@ -91,6 +92,10 @@ if [ -n "$build_kvmtool" ]; then
   make lkvm-static -j$(nproc)
   ${CROSS_COMPILE}strip lkvm-static
   cd ..
+fi
+
+if [ -n "$build_gtest" ]; then
+  ${CROSS_COMPILE}gcc -O0 gtest.c -static -o gtest
 fi
 
 if [ ! -d buildroot ]; then
@@ -111,7 +116,9 @@ fi
 if [ -n "$build_root" ]; then
   mkdir mnt
   sudo mount $BUILDROOT_ROOTFS mnt
+  # Copy guest Linux image and kvmtool to host rootfs image
   sudo cp linux/build/arch/riscv/boot/Image kvmtool/lkvm-static mnt/root
+  sudo cp gtest mem_usage kvmtool/lkvm-static mnt/root
   sudo umount mnt
   rmdir mnt
 fi
@@ -135,4 +142,5 @@ if [ -n "$run" ]; then
   cd ..
 fi
 
-# ssh -p 7722 root@localhost ./lkvm-static run -c2 --console virtio --cove-vm -p "earlycon=sbi console=hvc1" -k ./Image --virtio-transport=pci
+# ssh -p 7722 root@localhost
+# ./lkvm-static run -c1 --console virtio --cove-vm -p "earlycon=sbi console=hvc1" -k ./Image --virtio-transport=pci
