@@ -2,6 +2,33 @@
 
 BUILDROOT_ROOTFS=buildroot/output/images/rootfs.ext2
 
+export ARCH=riscv
+export CROSS_COMPILE=riscv64-linux-gnu-
+#export CC="${CROSS_COMPILE}gcc -mabi=lp64d -march=rv64gc"
+#export TRIPLET=$($CC -dumpmachine)
+#export SYSROOT=$($CC -print-sysroot)
+
+# Mem 
+
+# MemFree after running python in 2 VMs (w/ merge)
+# 1507096kB
+# 1507100kB (1831kB freed)
+# 1507352kB (1831kB freed)
+
+# MemFree after running python in 2 VMs (w/o merge)
+# 1505844kB
+# 1506092kB
+# 1506092kB
+
+: '
+export ARCH=riscv
+export CROSS_COMPILE=riscv64-linux-gnu-
+set CC_ARRAY $CROSS_COMPILE"gcc" -mabi=lp64d -march=rv64gc
+export CC="$CC_ARRAY"
+export TRIPLET=($CC_ARRAY -dumpmachine)
+export SYSROOT=($CC_ARRAY -print-sysroot)
+'
+
 build_qemu=
 build_linux=
 build_kvmtool=
@@ -58,8 +85,6 @@ if [ -n "$build_qemu" ]; then
   cd ../..
 fi
 
-export ARCH=riscv
-export CROSS_COMPILE=riscv64-linux-gnu-
 if [ ! -d linux ]; then
   git clone -b cove-integration git@github.com:tokyo4j/linux.git
   cd linux
@@ -70,19 +95,19 @@ if [ ! -d linux ]; then
   scripts/config --file build/.config --enable CONFIG_RISCV_SBI_V01
   scripts/config --file build/.config --enable CONFIG_KVM
   scripts/config --file build/.config --enable CONFIG_HVC_RISCV_SBI
+  scripts/config --file build/.config --enable CONFIG_DEBUG_INFO_DWARF5
   scripts/config --file build/.config --disable CONFIG_DRM
   cd ..
   build_linux=1
 fi
 if [ -n "$build_linux" ]; then
   cd linux
-  make O=./build LLVM=1 -j$(nproc)
+  make O=./build -j$(nproc)
+  # make O=./build LLVM=1 -j$(nproc)
   # scripts/clang-tools/gen_compile_commands.py -d build
   cd ..
 fi
 
-export ARCH=riscv
-export CROSS_COMPILE=riscv64-linux-gnu-
 if [ ! -d kvmtool ]; then
   git clone -b cove-integration-03072023 git@github.com:tokyo4j/kvmtool.git
   build_kvmtool=1
@@ -109,7 +134,7 @@ fi
 if [ -n "$build_buildroot" ]; then
   rm -f $BUILDROOT_ROOTFS
   cd buildroot
-  make -j$(nproc)
+  make -j$(nproc) $2
   cd ..
 fi
 
@@ -143,4 +168,4 @@ if [ -n "$run" ]; then
 fi
 
 # ssh -p 7722 root@localhost
-# ./lkvm-static run -c1 --console virtio --cove-vm -p "earlycon=sbi console=hvc1" -k ./Image --virtio-transport=pci
+# ./lkvm-static run -c1 --console virtio --cove-vm -p "earlycon=sbi console=hvc1 nokaslr" -k ./Image --virtio-transport=pci

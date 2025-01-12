@@ -1,9 +1,8 @@
 #!/bin/sh
 
-pids=$(pidof lkvm-static)
-# pids=$(pidof fish)
-for pid in $pids; do
-  vm_rss=$(cat /proc/$pid/status | grep VmRSS | awk '{print $2}')
-  vm_size=$(cat /proc/$pid/status | grep VmSize | awk '{print $2}')
-  echo vm_rss=$vm_rss vm_size=$vm_size
+while true; do
+  #cat /proc/zoneinfo | grep -e nr_free_pages -e count | awk '{s+=$2} END {print s}'
+  #cat /proc/zoneinfo | grep count:
+  cat /proc/meminfo | grep MemAvailable
+  sleep 1
 done

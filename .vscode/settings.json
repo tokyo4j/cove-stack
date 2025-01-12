@@ -6,5 +6,8 @@
     "qemu",
     "salus",
     "kvmtool"
-  ]
+  ],
+  "[python]": {
+    "editor.tabSize": 4
+  }
 }
